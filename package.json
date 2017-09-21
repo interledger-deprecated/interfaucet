@@ -1,0 +1,38 @@
+{
+  "name": "interfaucet",
+  "version": "3.4.1",
+  "description": "Connector used for https://github.com/interledger/interledger/wiki/Interledger-over-CLP",
+  "main": "src/index.js",
+  "dependencies": {
+    "ilp-node": "^4.0.0",
+    "ilp-packet": "^1.3.0"
+  },
+  "devDependencies": {
+    "chai": "^4.1.1",
+    "eslint": "^4.5.0",
+    "eslint-config-standard": "^10.2.1",
+    "eslint-plugin-import": "^2.7.0",
+    "eslint-plugin-node": "^5.1.0",
+    "eslint-plugin-promise": "^3.5.0",
+    "eslint-plugin-standard": "^3.0.1",
+    "mocha": "^3.4.1"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "test": "mocha",
+    "start": "node index.js"
+  },
+  "engines": {
+    "node": ">=8"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/interledgerjs/interfaucet.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/interledgerjs/interfaucet/issues"
+  },
+  "homepage": "https://github.com/interledgerjs/interfaucet#readme"
+}
