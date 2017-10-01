@@ -1,20 +1,20 @@
 const http = require('http')
-const IlpNode = require('ilp-node')
+const Plugin = require('ilp-plugin-btp-client')
 const IlpPacket = require('ilp-packet')
 
-const client = new IlpNode({
+const plugin = new Plugin({
   btp: {
     name: 'interfaucet',
     upstreams: [
       {
-        url: 'wss://amundsen.michielbdejong.com/ilp-node-3/api/v1',
+        url: 'wss://amundsen.michielbdejong.com/api/17q3',
         token: process.env.TOKEN
       }
     ]
   }
 })
 
-client.start().then(() => {
+plugin.connect().then(() => {
   console.log('client started, starting webserver')
   const server = http.createServer((req, res) => {
     Promise.resolve().then(() => {
@@ -30,11 +30,18 @@ client.start().then(() => {
       console.log('ipr', JSON.stringify(ipr))
       const ipp = IlpPacket.deserializeIlpPayment(ipr.packet)
       console.log('ipp', JSON.stringify(ipp))
-      return client.getPeer('btp').interledgerPayment({
-        amount: parseInt(ipp.amount),
-        executionCondition: ipr.condition,
-        expiresAt: new Date(new Date().getTime() + 3600 * 1000)
-      }, ipr.packet)
+      const transfer = {
+        id: uuid(),
+        from: plugin.getAccount(),
+        to: plugin().getInfo().connectors[0],
+        ledger: plugin.getInfo().prefix,
+        amount: ipp.amount,
+        ilp: base64url(ipp),
+        executionCondition: ipr.condition.toString('base64'),
+        expiresAt: new Date(new Date().getTime() + 1000000).toISOString()
+      }
+      console.log('lpi', transfer)
+      return plugin.sendTransfer(transfer)
     }).then(() => {
       res.end('<html><img src="https://i.pinimg.com/564x/88/84/85/888485cae122717788328b4486803a32.jpg"></html>')
     }, err => {
