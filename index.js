@@ -8,6 +8,47 @@ const plugin = new Plugin({
   btpUri: 'btp+wss://interfaucet:' + process.env.TOKEN + '@amundsen.michielbdejong.com/api/17q3',
 })
 
+function getQuote(ippBuf) {
+  const ipp = IlpPacket.deserializeIlpPayment(ippBuf)
+  console.log('ipp', JSON.stringify(ipp))
+  const quotePacket = IlpPacket.serializeIlqpByDestinationRequest({
+    destinationAccount: ipp.account,
+    destinationAmount: ipp.amount,
+    destinationHoldDuration: 3000 // gives the fund.js script 3 seconds to fulfill
+  })
+  const requestMessage = {
+    id: uuid(),
+    from: plugin.getAccount(),
+    to: plugin.getInfo().connectors[0],
+    ledger: plugin.getInfo().prefix,
+    ilp: base64url(quotePacket),
+    custom: {}
+  }
+  console.log('lpi quote', requestMessage)
+  return plugin.sendRequest(requestMessage).then(responseMessage => {
+    console.log({ responseMessage })
+    const quoteResponse = IlpPacket.deserializeIlqpByDestinationResponse(Buffer.from(responseMessage.ilp, 'base64'))
+    console.log({ quoteResponse }) // sourceAmount: '9000000000', sourceHoldDuration: 3000
+    return quoteResponse
+  })
+}
+
+function sendTransfer(sourceAmount, ipp, condition) {
+  const transfer = {
+    id: uuid(),
+    from: plugin.getAccount(),
+    to: plugin.getInfo().connectors[0],
+    ledger: plugin.getInfo().prefix,
+    amount: sourceAmount,
+    ilp: base64url(ipp),
+    executionCondition: condition.toString('base64'),
+    expiresAt: new Date(new Date().getTime() + 3600000).toISOString()
+  }
+  console.log('lpi transfer', transfer)
+  return plugin.sendTransfer(transfer)
+}
+
+
 plugin.connect().then(() => {
   console.log('client started, starting webserver')
   const server = http.createServer((req, res) => {
@@ -25,21 +66,16 @@ plugin.connect().then(() => {
         condition: iprBuf.slice(-32)
       }
       console.log('ipr', JSON.stringify(ipr))
-      const ipp = IlpPacket.deserializeIlpPayment(ipr.packet)
-      console.log('ipp', JSON.stringify(ipp))
-      const transfer = {
-        id: uuid(),
-        from: plugin.getAccount(),
-        to: plugin.getInfo().connectors[0],
-        ledger: plugin.getInfo().prefix,
-        amount: ipp.amount,
-        ilp: base64url(ipr.packet),
-        executionCondition: ipr.condition.toString('base64'),
-        expiresAt: new Date(new Date().getTime() + 1000000).toISOString()
-      }
-      console.log('lpi', transfer)
-      return plugin.sendTransfer(transfer).then(() => {
-        res.end(`<html><h2>Congrats!</h2><p>Sent ${ipp.amount} units to ${ipp.account}</p><img src="https://i.pinimg.com/564x/88/84/85/888485cae122717788328b4486803a32.jpg"></html>`)
+      return getQuote(ipr.packet).then(quoteResponse => {
+        if (quoteResponse.sourceHoldDuration > 3600000) {
+          return Promise.reject(new Error('That would cost the Interfaucet more than 1 hour!'))
+        }
+        if (parseInt(quoteResponse.sourceAmount) > 1000) {
+          return Promise.reject(new Error('That would cost the Interfaucet more than 1000 microdollars!'))
+        }
+        return sendTransfer(quoteResponse.sourceAmount, ipr.packet, ipr.condition).then(() => {
+          res.end(`<html><h2>Congrats!</h2><p>Sent ${quoteResponse.sourceAmount} microdollars</p><img src="https://i.pinimg.com/564x/88/84/85/888485cae122717788328b4486803a32.jpg"></html>`)
+        })
       })
     }).catch(err => {
       console.log(err, err.message)
